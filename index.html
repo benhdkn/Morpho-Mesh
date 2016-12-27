@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+
+<html>
+	<head>
+		<title>Morpho-Mesh</title>
+		<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+		<meta name="viewport" content="width=device-width, height=device-height, initial-scale=1">
+		<style type="text/css">
+			body {
+				background-color: #000000;
+				overflow: hidden;
+			}
+
+			#WebGLCanvas {
+				margin-top: 100px;
+			}
+		</style>
+		<script src="js/Three.min.js"></script>
+		<script src="js/Detector.js"></script>
+		<script src="js/ImprovedNoise.js"></script>
+
+		<script src="js/postprocessing/EffectComposer.js"></script>
+		<script src="js/postprocessing/RenderPass.js"></script>
+		<script src="js/postprocessing/ShaderPass.js"></script>
+		<script src="js/postprocessing/MaskPass.js"></script> 
+		<script src="js/postprocessing/BloomPass.js"></script> 
+		<script src="js/shaders/CopyShader.js"></script>
+
+		<script src="js/shaders/BleachBypassShader.js"></script>
+		<script src="js/shaders/ColorifyShader.js"></script>
+		<script src="js/shaders/DotScreenShader.js"></script>
+		<script src="js/shaders/BrightnessContrastShader.js"></script>
+		<script src="js/shaders/ColorCorrectionShader.js"></script>
+		<script src="js/shaders/ConvolutionShader.js"></script>
+		<script src="js/shaders/FilmShader.js"></script>
+		
+		<script src="js/shaders/FocusShader.js"></script>
+		<script src="js/shaders/HorizontalBlurShader.js"></script>
+		<script src="js/shaders/HueSaturationShader.js"></script>
+		<script src="js/shaders/KaleidoShader.js"></script>
+		<script src="js/shaders/LuminosityShader.js"></script>
+		<script src="js/shaders/MirrorShader.js"></script>
+		<script src="js/shaders/RGBShiftShader.js"></script>
+		<script src="js/shaders/SepiaShader.js"></script>
+		<script src="js/shaders/VerticalBlurShader.js"></script>
+		<script src="js/shaders/VignetteShader.js"></script>
+	</head>
+	<body>
+
+		<div id="WebGLCanvas">
+
+		<script type="x-shader/x-vertex" id="vertexShader">
+			varying vec3 vWorldPosition;
+
+			void main() {
+				vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+				vWorldPosition = worldPosition.xyz;
+
+				gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+			}
+
+		</script>
+
+		<script type="x-shader/x-fragment" id="fragmentShader">
+			uniform vec3 topColor;
+			uniform vec3 bottomColor;
+			uniform float offset;
+			uniform float exponent;
+
+			varying vec3 vWorldPosition;
+
+			void main() {
+				float h = normalize(vWorldPosition + offset).y;
+				gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(h, exponent), 0.0)), 1.0);
+			}
+		</script>
+
+		<script>
+			var scene;
+			var camera;
+			var clock;
+
+			var wireframeMesh;
+
+			initializeScene();
+			animateScene();
+
+			function initializeScene(){
+				if(Detector.webgl) {
+					renderer = new THREE.WebGLRenderer({ antialiasing:true });
+				} else {
+					renderer = new THREE.CanvasRenderer();
+				}
+
+				var MARGIN = 100;
+				canvasWidth = window.innerWidth;
+				canvasHeight = window.innerHeight - 2 * MARGIN;
+
+				renderer.setSize(canvasWidth, canvasHeight);
+
+				document.getElementById("WebGLCanvas").appendChild(renderer.domElement);
+
+				scene = new THREE.Scene();
+
+				// Timer
+				clock = new THREE.Clock();
+
+				// Lighting
+				var light = new THREE.PointLight(0xffffff, 1, 0);
+				light.position.set(0, 200, 0);
+				scene.add(light);
+
+				// Camera
+				camera = new THREE.PerspectiveCamera(45, canvasWidth / canvasHeight, 0.1, 10000);
+				camera.position.set(0, 400, 600);
+    			camera.lookAt(scene.position);
+				scene.add(camera);
+
+				// Meshes
+				var noiseData = generateNoise(1024, 1024);
+				var quality = 4;
+				var step = 1024 / quality;
+
+				var geometry = new THREE.PlaneGeometry(400, 400, quality - 1, quality - 1);
+				// Rotate the geometry
+				geometry.applyMatrix(new THREE.Matrix4().makeRotationX(- Math.PI / 2));
+				// Generate noise
+				for (var i = 0, l = geometry.vertices.length; i < l; i ++) {
+					var x = i % quality;
+					var y = Math.floor(i / quality);
+					geometry.vertices[i].y = noiseData[(x * step) + (y * step) * 1024] * 2 - 128;
+				}
+
+				var baseLitMaterial = new THREE.MeshPhongMaterial({
+					color: 0x191919,
+					emissive: 0x0c2426,
+					specular: 0xb62d2d,
+    				shininess: 10,
+					shading: THREE.FlatShading,
+					depthTest: false,
+				});
+
+				var wireframeMaterial = new THREE.MeshBasicMaterial({
+					color: 0xFFFFFF, 
+					wireframe: true
+				});
+				
+				baseMesh = new THREE.Mesh(geometry, baseLitMaterial);
+				baseMesh.position.set(0, 0, 0);
+				scene.add(baseMesh);
+
+				wireframeMesh = new THREE.Mesh(geometry, wireframeMaterial);
+				wireframeMesh.position.set(0, 0, 0);
+				wireframeMesh.rotation.y = Math.PI / 3;
+				scene.add(wireframeMesh);
+
+				postProcess();
+			}
+
+			function postProcess() {
+				// Create Shader Passes
+			 	var renderPass = new THREE.RenderPass(scene, camera);
+			 	var copyPass = new THREE.ShaderPass(THREE.CopyShader);
+			    var bloomPass = new THREE.BloomPass(1, 50, 0.5, 1024);
+
+				// Apply shader
+			    composer = new THREE.EffectComposer(renderer);
+			    composer.addPass(renderPass);
+			    composer.addPass(bloomPass);
+				composer.addPass(copyPass);
+			    copyPass.renderToScreen = true;
+			}
+
+
+			function generateNoise(width, height) {
+				var data = new Uint8Array(width * height);
+				var perlin = new ImprovedNoise();
+				var size = width * height;
+				var quality = 1;
+				var z = Math.random() * 100;
+
+				for (var j = 0; j < 4; j ++) {
+					quality *= 4;
+					for (var i = 0; i < size; i ++) {
+						var x = i % width, y = ~~ (i / width);
+						data[i] += Math.abs(perlin.noise(x / quality, y / quality, z) * 0.5) * quality + 10;
+					}
+				}
+				return data;
+			}
+
+			// Temp
+			var dir = 0;
+			var timer = 0;
+
+			function animateScene() {
+				requestAnimationFrame(animateScene);
+				renderScene();
+
+				// WTF? doesnt' work out of function
+				var velocity = 0;
+				timer += clock.getDelta();
+				if (timer > 0 && timer < 5) {
+					velocity -= 0.02;
+				}
+				else if (timer > 5 && timer < 10) {
+					velocity += 0.02;
+				}
+				else if (timer > 10){
+					timer = 0;
+				}
+				console.log(velocity);
+				
+				// Doesn't work out of the function
+				wireframeMesh.geometry.verticesNeedUpdate = true;
+
+				for (i = 0; i < wireframeMesh.geometry.vertices.length; i++) {
+					if (i % 2 != 0) {
+						dir = -1;
+					}
+					else {
+						dir = 1;
+					}
+					wireframeMesh.geometry.vertices[i].x += velocity * dir;
+					wireframeMesh.geometry.vertices[i].y += velocity * dir;
+					wireframeMesh.geometry.vertices[i].z += velocity * dir;
+				}
+
+			}
+
+			function renderScene() {
+				renderer.setClearColor(0x000000, 1);
+				// Render without shader passes
+				// renderer.render(scene, camera);
+				// Render with shader passes
+				composer.render();
+			}
+
+		</script>
+	</body>
+</html>
