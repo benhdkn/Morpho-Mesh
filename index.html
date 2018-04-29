@@ -11,71 +11,48 @@
                 padding: 0; border: none; 
             }
 
-            #threejs-canvas {
+            /* #threejs-canvas {
                 width: 100%;
                 height: 100%;
-            }
+
+            } */
+
+			#mode-list {
+				position: absolute;
+				top: 2%;
+				left: 50%;
+				height: 20px;
+				transform: translateX(-50%);
+				font-family: consolas, sans-serif;
+				font-size: 10px;
+				color: white;
+				z-index: 10;
+			}
+
+			#black-band-top, #black-band-bottom {
+				position: absolute;
+				width: 100%;
+				height: 200px;
+				z-index: 5;
+				background-color: black;
+			}
+
+			#black-band-bottom {
+				bottom: 0;
+			}
 		</style>
 
 		<script src="js/Three.min.js"></script>
 		<script src="js/Detector.js"></script>
 		<script src="js/ImprovedNoise.js"></script>
 		<script src="js/OrbitControls.js"></script>
-
-		<script src="js/postprocessing/EffectComposer.js"></script>
-		<script src="js/postprocessing/RenderPass.js"></script>
-		<script src="js/postprocessing/ShaderPass.js"></script>
-		<script src="js/postprocessing/MaskPass.js"></script> 
-		<script src="js/postprocessing/BloomPass.js"></script> 
-
-		<script src="js/shaders/CopyShader.js"></script>
-		<script src="js/shaders/BleachBypassShader.js"></script>
-		<script src="js/shaders/ColorifyShader.js"></script>
-		<script src="js/shaders/DotScreenShader.js"></script>
-		<script src="js/shaders/BrightnessContrastShader.js"></script>
-		<script src="js/shaders/ColorCorrectionShader.js"></script>
-		<script src="js/shaders/ConvolutionShader.js"></script>
-		<script src="js/shaders/FilmShader.js"></script>	
-		<script src="js/shaders/FocusShader.js"></script>
-		<script src="js/shaders/HorizontalBlurShader.js"></script>
-		<script src="js/shaders/HueSaturationShader.js"></script>
-		<script src="js/shaders/KaleidoShader.js"></script>
-		<script src="js/shaders/LuminosityShader.js"></script>
-		<script src="js/shaders/MirrorShader.js"></script>
-		<script src="js/shaders/RGBShiftShader.js"></script>
-		<script src="js/shaders/SepiaShader.js"></script>
-		<script src="js/shaders/VerticalBlurShader.js"></script>
-		<script src="js/shaders/VignetteShader.js"></script>
 	</head>
 	<body>
 
+		<div id="black-band-top"></div>
+		<div id="black-band-bottom"></div>
+
 		<div id="threejs-canvas">
-
-		<script type="x-shader/x-vertex" id="vertexShader">
-			varying vec3 vWorldPosition;
-
-			void main() {
-				vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-				vWorldPosition = worldPosition.xyz;
-
-				gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-			}
-
-		</script>
-
-		<script type="x-shader/x-fragment" id="fragmentShader">
-			uniform vec3 topColor;
-			uniform vec3 bottomColor;
-			uniform float offset;
-			uniform float exponent;
-
-			varying vec3 vWorldPosition;
-
-			void main() {
-				float h = normalize(vWorldPosition + offset).y;
-				gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(h, exponent), 0.0)), 1.0);
-			}
-		</script>
 
 		<script>
 			var scene;
@@ -88,6 +65,9 @@
 			var timer = 0;
 			var pointsYInitValues = [];
 			var pointsYRandomDir = [];
+			
+			var _hasChangedDirection = false;
+			var hasChangedDirection = false;
 
 			initializeScene();
 			animateScene();
@@ -117,12 +97,12 @@
 
 				// Camera
 				camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 10000);
-				camera.position.set(0, 100, 500);
+				camera.position.set(0, 1800, 0);
 				scene.add(camera);
 
 				// Controls
 				controls = new THREE.OrbitControls(camera);
-				controls.autoRotate = true;
+				// controls.autoRotate = true;
 				controls.autoRotateSpeed = 0.5;
 
 				// Meshes
@@ -153,34 +133,28 @@
 					side: THREE.DoubleSide,
 					depthTest: false,
 				});
-
-				var wireframeWhiteMaterial = new THREE.MeshBasicMaterial({
-					color: 0xFFFFFF, 
-					transparent: true,
-					opacity: 0.2,
-					lights: false,
-					wireframe: true
-				});
-
-				var wireframeBlackMaterial = new THREE.MeshBasicMaterial({
-					color: 0x000000, 
-					lights: false,
-					wireframe: true
-				});
 				
 				var baseMesh = new THREE.Mesh(geometry, baseLitMaterial);
 				baseMesh.position.set(0, 0, 0);
+				baseMesh.rotation.y = Math.PI / 4;
 				scene.add(baseMesh);
 
-				var wireframeWhiteMesh = new THREE.Mesh(geometry, wireframeWhiteMaterial);
-				wireframeWhiteMesh.position.set(0, 1, 0);
-				// wireframeMesh.rotation.y = Math.PI / 8; Turn that into an animation
-				scene.add(wireframeWhiteMesh);
+				var lineMaterial = new THREE.LineBasicMaterial({
+					color: 0x717171
+				});
 
-				var wireframeBlackMesh = new THREE.Mesh(geometry, wireframeBlackMaterial);
-				wireframeBlackMesh.position.set(0, -1, 0);
-				scene.add(wireframeBlackMesh);
+				var lineLeftGeometry = new THREE.Geometry();
+				lineLeftGeometry.vertices.push(new THREE.Vector3(-10000, 0, 0));
+				lineLeftGeometry.vertices.push(new THREE.Vector3(-450, 0, 0));
+				var lineLeft = new THREE.Line(lineLeftGeometry, lineMaterial);
+				scene.add(lineLeft);
 
+				var lineRightGeometry = new THREE.Geometry();
+				lineRightGeometry.vertices.push(new THREE.Vector3(10000, 0, 0));
+				lineRightGeometry.vertices.push(new THREE.Vector3(450, 0, 0));
+				var lineRight = new THREE.Line(lineRightGeometry, lineMaterial);
+				scene.add(lineRight);
+				
 				// Set the orbit control to rotate around the mesh center
 				var geomCenter = THREE.GeometryUtils.center(geometry);
 				controls.center = geomCenter;
@@ -188,23 +162,7 @@
 				// Event listeners
 				window.addEventListener('resize', onWindowResize, false);
                 window.addEventListener('keydown', onKeyDown, false);
-				
-				// Post processing
-				postProcess();
-			}
 
-			function postProcess() {
-				// Create Shader Passes
-			 	var renderPass = new THREE.RenderPass(scene, camera);
-			 	var copyPass = new THREE.ShaderPass(THREE.CopyShader);
-			    var bloomPass = new THREE.BloomPass(1, 50, 0.5, 1024);
-
-				// Apply shader
-			    composer = new THREE.EffectComposer(renderer);
-			    composer.addPass(renderPass);
-			    composer.addPass(bloomPass);
-				composer.addPass(copyPass);
-			    copyPass.renderToScreen = true;
 			}
 
 			function generateNoise(width, height) {
@@ -224,12 +182,14 @@
 				return data;
 			}
 
+			var temp = 0;
+
 			function animateScene() {
 				requestAnimationFrame(animateScene);
 				renderScene();
 
 				timer += clock.getDelta();
-				
+
 				// Doesn't work out of the function
 				geometry.verticesNeedUpdate = true;
 
@@ -237,8 +197,8 @@
 				for (i = 0; i < geometry.vertices.length; i++) {
 					var dir = pointsYRandomDir[i];
 					var vertice = geometry.vertices[i];
-					var initYPos = pointsYInitValues[i];
-					var newYPos = initYPos + (Math.sin(timer) * 10.0 * dir);
+					// var initYPos = pointsYInitValues[i];
+					var newYPos = (Math.sin(timer) * 10.0 * dir);
 					vertice.y = newYPos;
 				}
 
@@ -247,10 +207,7 @@
 
 			function renderScene() {
 				renderer.setClearColor(0x1e1e1e, 1);
-				// Render without shader passes
 				renderer.render(scene, camera);
-				// Render with shader passes
-				// composer.render();
 			}
 
 			function onWindowResize(){
@@ -262,8 +219,8 @@
 
 			function onKeyDown() {
                 switch (event.keyCode) {
-                    case 97: // numpad 1
-                    case 49: // 1
+                    case 32: // Space
+
                         break;
                 }
             }
