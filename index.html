@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 
 <html>
+
 	<head>
 		<title>Morpho-Mesh</title>
 		<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
@@ -10,25 +11,6 @@
                 margin: 0 auto; 
                 padding: 0; border: none; 
             }
-
-            /* #threejs-canvas {
-                width: 100%;
-                height: 100%;
-
-            } */
-
-			#mode-list {
-				position: absolute;
-				top: 2%;
-				left: 50%;
-				height: 20px;
-				transform: translateX(-50%);
-				font-family: consolas, sans-serif;
-				font-size: 10px;
-				color: white;
-				z-index: 10;
-			}
-
 			#black-band-top, #black-band-bottom {
 				position: absolute;
 				width: 100%;
@@ -36,7 +18,6 @@
 				z-index: 5;
 				background-color: black;
 			}
-
 			#black-band-bottom {
 				bottom: 0;
 			}
@@ -47,10 +28,12 @@
 		<script src="js/ImprovedNoise.js"></script>
 		<script src="js/OrbitControls.js"></script>
 	</head>
-	<body>
 
+	<body>
 		<div id="black-band-top"></div>
 		<div id="black-band-bottom"></div>
+
+		<audio id="audio-file" src="audio/Doomsday Clock.mp3" autoplay></audio>
 
 		<div id="threejs-canvas">
 
@@ -59,15 +42,45 @@
 			var camera;
 			var clock;
 			var controls;
+			
+			var planeSegments = 16;
 
-			var geometry;
+			var centerPlaneGeometry;
+			var centerPlaneGeometryVerticesYRandomDir = [];
+
+			var leftPlaneGeometry;
+			var rightPlaneGeometry;
+			var sidePlanesGeometryVerticesYRandomDir = [];
 
 			var timer = 0;
-			var pointsYInitValues = [];
-			var pointsYRandomDir = [];
-			
-			var _hasChangedDirection = false;
-			var hasChangedDirection = false;
+
+			// Audio
+
+			// create an AudioListener and add it to the camera
+			var listener = new THREE.AudioListener();
+			// camera.add( listener );
+
+			// create an Audio source
+			var sound = new THREE.Audio( listener );
+
+			var test = document.getElementById('audio-file');
+
+			// load a sound and set it as the Audio object's buffer
+			var audioLoader = new THREE.AudioLoader();
+			audioLoader.load( test.src, function( buffer ) {
+				sound.setBuffer( buffer );
+				sound.setLoop(true);
+				sound.setVolume(0.5);
+				sound.play();
+			});
+
+			// create an AudioAnalyser, passing in the sound and desired fftSize
+			var analyser = new THREE.AudioAnalyser( sound, 32 );
+			// analyser.smoothingTimeConstant = 0;
+
+			// get the average frequency of the sound
+			var data = analyser.getAverageFrequency();
+			//
 
 			initializeScene();
 			animateScene();
@@ -95,94 +108,83 @@
 				light.position.set(0, 200, 0);
 				scene.add(light);
 
+				// Left light
+
 				// Camera
 				camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 10000);
 				camera.position.set(0, 1800, 0);
+				//
+				// camera.add( listener );
 				scene.add(camera);
 
-				// Controls
+				// Controls, temporary
 				controls = new THREE.OrbitControls(camera);
-				// controls.autoRotate = true;
-				controls.autoRotateSpeed = 0.5;
 
-				// Meshes
-				var noiseData = generateNoise(1024, 1024);
-				var quality = 8;
-				var step = 1024 / quality;
-
-				geometry = new THREE.PlaneGeometry(600, 600, quality - 1, quality - 1);
-				// Rotate the geometry
-				geometry.applyMatrix(new THREE.Matrix4().makeRotationX(- Math.PI / 2));
-				// Generate noise
-				for (var i = 0, l = geometry.vertices.length; i < l; i ++) {
-					var x = i % quality;
-					var y = Math.floor(i / quality);
-					var noiseY = noiseData[(x * step) + (y * step) * 1024] * 2 - 128;
-					geometry.vertices[i].y = noiseY;
-					pointsYInitValues.push(noiseY);
-					var dir = Math.random() < 0.5 ? -1 : 1;
-					pointsYRandomDir.push(dir);
-				}
-
-				var baseLitMaterial = new THREE.MeshPhongMaterial({
+				// Main plane
+				centerPlaneGeometry = new THREE.PlaneGeometry(600, 600, planeSegments, planeSegments);
+				centerPlaneGeometry.applyMatrix(new THREE.Matrix4().makeRotationX(- Math.PI / 2));
+				var centerPlaneMaterial = new THREE.MeshPhongMaterial({
 					color: 0x191919,
 					emissive: 0x0c2426,
 					specular: 0xb62d2d,
     				shininess: 10,
 					shading: THREE.FlatShading,
-					side: THREE.DoubleSide,
-					depthTest: false,
 				});
-				
-				var baseMesh = new THREE.Mesh(geometry, baseLitMaterial);
-				baseMesh.position.set(0, 0, 0);
-				baseMesh.rotation.y = Math.PI / 4;
-				scene.add(baseMesh);
+				var planeMesh = new THREE.Mesh(centerPlaneGeometry, centerPlaneMaterial);
+				planeMesh.position.set(0, 0, 0);
+				planeMesh.rotation.y = Math.PI / 4;
+				scene.add(planeMesh);
 
+				// Side planes
+				var sidePlanesMaterial = new THREE.MeshPhongMaterial({
+					color: 0x515151,
+					emissive: 0x0c2426,
+					specular: 0x000000,
+    				shininess: 10,
+					shading: THREE.FlatShading,
+				});
+
+				leftPlaneGeometry = new THREE.PlaneGeometry(300, 300, planeSegments / 2, planeSegments / 2);
+				leftPlaneGeometry.applyMatrix(new THREE.Matrix4().makeRotationX(- Math.PI / 2));
+				var leftPlaneMesh = new THREE.Mesh(leftPlaneGeometry, sidePlanesMaterial);
+				leftPlaneMesh.position.set(-1000, 0, 0);
+				leftPlaneMesh.rotation.y = Math.PI / 4;
+				scene.add(leftPlaneMesh);
+
+				rightPlaneGeometry = new THREE.PlaneGeometry(300, 300, planeSegments / 2, planeSegments / 2);
+				rightPlaneGeometry.applyMatrix(new THREE.Matrix4().makeRotationX(- Math.PI / 2));
+				var rightPlaneMesh = new THREE.Mesh(rightPlaneGeometry, sidePlanesMaterial);
+				rightPlaneMesh.position.set(1000, 0, 0);
+				rightPlaneMesh.rotation.y = Math.PI / 4;
+				scene.add(rightPlaneMesh);
+
+				// Horizontal line
 				var lineMaterial = new THREE.LineBasicMaterial({
-					color: 0x717171
+					color: 0x717171,
 				});
+				var horizontalLineGeometry = new THREE.Geometry();
+				horizontalLineGeometry.vertices.push(new THREE.Vector3(-1000, -50, 0));
+				horizontalLineGeometry.vertices.push(new THREE.Vector3(1000, -50, 0));
+				var horizontalLine = new THREE.Line(horizontalLineGeometry, lineMaterial);
+				scene.add(horizontalLine);
 
-				var lineLeftGeometry = new THREE.Geometry();
-				lineLeftGeometry.vertices.push(new THREE.Vector3(-10000, 0, 0));
-				lineLeftGeometry.vertices.push(new THREE.Vector3(-450, 0, 0));
-				var lineLeft = new THREE.Line(lineLeftGeometry, lineMaterial);
-				scene.add(lineLeft);
-
-				var lineRightGeometry = new THREE.Geometry();
-				lineRightGeometry.vertices.push(new THREE.Vector3(10000, 0, 0));
-				lineRightGeometry.vertices.push(new THREE.Vector3(450, 0, 0));
-				var lineRight = new THREE.Line(lineRightGeometry, lineMaterial);
-				scene.add(lineRight);
-				
-				// Set the orbit control to rotate around the mesh center
-				var geomCenter = THREE.GeometryUtils.center(geometry);
-				controls.center = geomCenter;
+				// Generate random directions for planes vertices
+				for (var i = 0; i < centerPlaneGeometry.vertices.length; i++) {
+					var randomDir = Math.random() < 0.5 ? -1 : 1;
+					centerPlaneGeometryVerticesYRandomDir.push(randomDir);
+				}
+				for (var i = 0; i < leftPlaneGeometry.vertices.length; i++) {
+					var randomDir = Math.random() < 0.5 ? -1 : 1;
+					sidePlanesGeometryVerticesYRandomDir.push(randomDir);
+				}
 				
 				// Event listeners
 				window.addEventListener('resize', onWindowResize, false);
                 window.addEventListener('keydown', onKeyDown, false);
 
+				console.log(centerPlaneGeometry.vertices.length);
+				console.log(leftPlaneGeometry.vertices.length);
 			}
-
-			function generateNoise(width, height) {
-				var data = new Uint8Array(width * height);
-				var perlin = new ImprovedNoise();
-				var size = width * height;
-				var quality = 1;
-				var z = Math.random() * 100;
-
-				for (var j = 0; j < 4; j ++) {
-					quality *= 4;
-					for (var i = 0; i < size; i ++) {
-						var x = i % width, y = ~~ (i / width);
-						data[i] += Math.abs(perlin.noise(x / quality, y / quality, z) * 0.5) * quality + 10;
-					}
-				}
-				return data;
-			}
-
-			var temp = 0;
 
 			function animateScene() {
 				requestAnimationFrame(animateScene);
@@ -191,18 +193,35 @@
 				timer += clock.getDelta();
 
 				// Doesn't work out of the function
-				geometry.verticesNeedUpdate = true;
-
+				centerPlaneGeometry.verticesNeedUpdate = true;
 				// Sin move the points
-				for (i = 0; i < geometry.vertices.length; i++) {
-					var dir = pointsYRandomDir[i];
-					var vertice = geometry.vertices[i];
-					// var initYPos = pointsYInitValues[i];
-					var newYPos = (Math.sin(timer) * 10.0 * dir);
+				for (i = 0; i < centerPlaneGeometry.vertices.length; i++) {
+					var dir = centerPlaneGeometryVerticesYRandomDir[i];
+					var vertice = centerPlaneGeometry.vertices[i];
+					var newYPos = (Math.sin(timer) * analyser.getAverageFrequency() * dir);
+					// var newYPos = analyser.getAverageFrequency() * 0.2 * dir;
 					vertice.y = newYPos;
 				}
 
+				leftPlaneGeometry.verticesNeedUpdate = true;
+				rightPlaneGeometry.verticesNeedUpdate = true;
+				// Same number of vertices for left & right so let's put it all in there
+				for (i = 0; i < leftPlaneGeometry.vertices.length; i++) {
+					// Left
+					var leftPlaneVerticeDir = sidePlanesGeometryVerticesYRandomDir[i];
+					var leftPlaneVertice = leftPlaneGeometry.vertices[i];
+					var leftPlaneVerticeNewYPos = (Math.sin(timer) * analyser.getAverageFrequency() * 0.2 * leftPlaneVerticeDir);
+					leftPlaneVertice.y = leftPlaneVerticeNewYPos;
+					// Right
+					var rightPlaneVerticeDir = sidePlanesGeometryVerticesYRandomDir[i];
+					var rightPlaneVertice = rightPlaneGeometry.vertices[i];
+					var rightPlaneVerticeNewYPos = (Math.sin(timer) * analyser.getAverageFrequency() * 0.2  * rightPlaneVerticeDir);
+					rightPlaneVertice.y = rightPlaneVerticeNewYPos;
+				}
+
 				controls.update();
+
+				// console.log(analyser.getAverageFrequency());
 			}
 
 			function renderScene() {
@@ -213,17 +232,29 @@
 			function onWindowResize(){
                 camera.aspect = window.innerWidth / window.innerHeight;
                 camera.updateProjectionMatrix();
-
                 renderer.setSize(window.innerWidth, window.innerHeight);
             }
 
 			function onKeyDown() {
                 switch (event.keyCode) {
                     case 32: // Space
-
                         break;
                 }
             }
+
+			function getRandomLineGeometry() {
+				var lineGeometry = new THREE.Geometry();
+				var verticesCount = 30;
+				for (var i = 0; i < verticesCount ; i++) {
+					lineGeometry.vertices.push(new THREE.Vector3(getRandomInt(250), getRandomInt(250), getRandomInt(250)));
+				}
+				return lineGeometry;
+			}
+
+			function getRandomInt(max) {
+				return Math.floor(Math.random() * Math.floor(max));
+			}
 		</script>
 	</body>
+
 </html>
