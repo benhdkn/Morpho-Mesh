@@ -21,66 +21,61 @@
 			#black-band-bottom {
 				bottom: 0;
 			}
+			#music-caption {
+				position: absolute;
+				right: 40px;
+				bottom: 40px;
+				font-family: consolas;
+				font-size: 10px;
+				color: silver;
+				z-index: 10;
+			}
+			a {
+				color: inherit;
+			}
 		</style>
 
 		<script src="js/Three.min.js"></script>
 		<script src="js/Detector.js"></script>
 		<script src="js/ImprovedNoise.js"></script>
 		<script src="js/OrbitControls.js"></script>
+
 	</head>
 
 	<body>
 		<div id="black-band-top"></div>
 		<div id="black-band-bottom"></div>
-
-		<audio id="audio-file" src="audio/Doomsday Clock.mp3" autoplay></audio>
+		<div id="music-caption">Track is Breakout by <a href="https://prtcl.bandcamp.com/track/breakout">PRTCL</a></div>
 
 		<div id="threejs-canvas">
 
 		<script>
+			
 			var scene;
 			var camera;
 			var clock;
 			var controls;
-			
-			var planeSegments = 16;
-
-			var centerPlaneGeometry;
-			var centerPlaneGeometryVerticesYRandomDir = [];
-
-			var leftPlaneGeometry;
-			var rightPlaneGeometry;
-			var sidePlanesGeometryVerticesYRandomDir = [];
+			var light; 
+			var planeGeometry;
 
 			var timer = 0;
+			var pointsYInitValues = [];
+			var pointsYRandomDir = [];
 
-			// Audio
-
-			// create an AudioListener and add it to the camera
 			var listener = new THREE.AudioListener();
-			// camera.add( listener );
+			var sound = new THREE.Audio(listener);
 
-			// create an Audio source
-			var sound = new THREE.Audio( listener );
-
-			var test = document.getElementById('audio-file');
-
-			// load a sound and set it as the Audio object's buffer
+			// Load a sound and set it as the Audio object's buffer
 			var audioLoader = new THREE.AudioLoader();
-			audioLoader.load( test.src, function( buffer ) {
-				sound.setBuffer( buffer );
+			audioLoader.load('audio/PRTCL_Breakout.mp3', function(buffer) {
+				sound.setBuffer(buffer);
 				sound.setLoop(true);
 				sound.setVolume(0.5);
 				sound.play();
 			});
 
-			// create an AudioAnalyser, passing in the sound and desired fftSize
-			var analyser = new THREE.AudioAnalyser( sound, 32 );
-			// analyser.smoothingTimeConstant = 0;
-
-			// get the average frequency of the sound
-			var data = analyser.getAverageFrequency();
-			//
+			// Create an AudioAnalyser, passing in the sound and desired fftSize
+			var analyser = new THREE.AudioAnalyser(sound, 128);
 
 			initializeScene();
 			animateScene();
@@ -94,7 +89,7 @@
 					renderer = new THREE.CanvasRenderer();
 				}
                 renderer.setSize(window.innerWidth, window.innerHeight);
-				renderer.setPixelRatio(2);
+				// renderer.setPixelRatio(1);
                 document.body.appendChild(renderer.domElement);
 				
 				// Scene
@@ -104,156 +99,130 @@
 				clock = new THREE.Clock();
 
 				// Lighting
-				var light = new THREE.PointLight(0xffffff, 1, 0);
-				light.position.set(0, 200, 0);
+				light = new THREE.PointLight(0xffffff, 1, 0);
+				light.position.set(0, 400, 0);
 				scene.add(light);
 
-				// Left light
-
 				// Camera
-				camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 10000);
-				camera.position.set(0, 1800, 0);
-				//
-				// camera.add( listener );
+				camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 10000);
+				camera.position.set(0, 100, 500);
 				scene.add(camera);
 
-				// Controls, temporary
+				// Controls
 				controls = new THREE.OrbitControls(camera);
+				controls.autoRotate = true;
+				controls.autoRotateSpeed = 0.5;
+				controls.enabled = false;
 
-				// Main plane
-				centerPlaneGeometry = new THREE.PlaneGeometry(600, 600, planeSegments, planeSegments);
-				centerPlaneGeometry.applyMatrix(new THREE.Matrix4().makeRotationX(- Math.PI / 2));
-				var centerPlaneMaterial = new THREE.MeshPhongMaterial({
+				// Meshes
+				var noiseData = getNoiseData(1024, 1024);
+				var quality = 8;
+				var step = 1024 / quality;
+				planeGeometry = new THREE.PlaneGeometry(600, 600, quality - 1, quality - 1);
+				// Rotate the geometry
+				planeGeometry.applyMatrix(new THREE.Matrix4().makeRotationX(- Math.PI / 2));
+				// Apply noise, save it and set a random direction for each vertices
+				for (var i = 0, l = planeGeometry.vertices.length; i < l; i ++) {
+					var x = i % quality;
+					var y = Math.floor(i / quality);
+					var noiseY = noiseData[(x * step) + (y * step) * 1024] * 2 - 128;
+					planeGeometry.vertices[i].y = noiseY;
+
+					pointsYInitValues.push(noiseY);
+
+					var dir = Math.random() < 0.5 ? -1 : 1;
+					pointsYRandomDir.push(dir);
+				}
+
+				var baseLitMaterial = new THREE.MeshPhongMaterial({
 					color: 0x191919,
 					emissive: 0x0c2426,
 					specular: 0xb62d2d,
-    				shininess: 10,
+    				shininess: 15,
 					shading: THREE.FlatShading,
+					side: THREE.DoubleSide,
+					depthTest: false,
 				});
-				var planeMesh = new THREE.Mesh(centerPlaneGeometry, centerPlaneMaterial);
+
+				var wireframeMaterial = new THREE.MeshBasicMaterial({
+					color: 0xFFFFFF, 
+					transparent: true,
+					opacity: 0.1,
+					wireframe: true,
+				});
+
+				var bottomMaterial = new THREE.MeshBasicMaterial({
+					color: 0x191919, 
+					transparent: true,
+					opacity: 0.3,
+				});
+				
+				var planeMesh = new THREE.Mesh(planeGeometry, baseLitMaterial);
 				planeMesh.position.set(0, 0, 0);
-				planeMesh.rotation.y = Math.PI / 4;
 				scene.add(planeMesh);
-
-				// Side planes
-				var sidePlanesMaterial = new THREE.MeshPhongMaterial({
-					color: 0x515151,
-					emissive: 0x0c2426,
-					specular: 0x000000,
-    				shininess: 10,
-					shading: THREE.FlatShading,
-				});
-
-				leftPlaneGeometry = new THREE.PlaneGeometry(300, 300, planeSegments / 2, planeSegments / 2);
-				leftPlaneGeometry.applyMatrix(new THREE.Matrix4().makeRotationX(- Math.PI / 2));
-				var leftPlaneMesh = new THREE.Mesh(leftPlaneGeometry, sidePlanesMaterial);
-				leftPlaneMesh.position.set(-1000, 0, 0);
-				leftPlaneMesh.rotation.y = Math.PI / 4;
-				scene.add(leftPlaneMesh);
-
-				rightPlaneGeometry = new THREE.PlaneGeometry(300, 300, planeSegments / 2, planeSegments / 2);
-				rightPlaneGeometry.applyMatrix(new THREE.Matrix4().makeRotationX(- Math.PI / 2));
-				var rightPlaneMesh = new THREE.Mesh(rightPlaneGeometry, sidePlanesMaterial);
-				rightPlaneMesh.position.set(1000, 0, 0);
-				rightPlaneMesh.rotation.y = Math.PI / 4;
-				scene.add(rightPlaneMesh);
-
-				// Horizontal line
-				var lineMaterial = new THREE.LineBasicMaterial({
-					color: 0x717171,
-				});
-				var horizontalLineGeometry = new THREE.Geometry();
-				horizontalLineGeometry.vertices.push(new THREE.Vector3(-1000, -50, 0));
-				horizontalLineGeometry.vertices.push(new THREE.Vector3(1000, -50, 0));
-				var horizontalLine = new THREE.Line(horizontalLineGeometry, lineMaterial);
-				scene.add(horizontalLine);
-
-				// Generate random directions for planes vertices
-				for (var i = 0; i < centerPlaneGeometry.vertices.length; i++) {
-					var randomDir = Math.random() < 0.5 ? -1 : 1;
-					centerPlaneGeometryVerticesYRandomDir.push(randomDir);
-				}
-				for (var i = 0; i < leftPlaneGeometry.vertices.length; i++) {
-					var randomDir = Math.random() < 0.5 ? -1 : 1;
-					sidePlanesGeometryVerticesYRandomDir.push(randomDir);
-				}
+				var wireframeMesh = new THREE.Mesh(planeGeometry, wireframeMaterial);
+				wireframeMesh.position.set(0, 1, 0);
+				scene.add(wireframeMesh);
+				var bottomMesh = new THREE.Mesh(planeGeometry, bottomMaterial);
+				bottomMesh.position.set(0, -1, 0);
+				scene.add(bottomMesh);
 				
 				// Event listeners
 				window.addEventListener('resize', onWindowResize, false);
-                window.addEventListener('keydown', onKeyDown, false);
+			}
 
-				console.log(centerPlaneGeometry.vertices.length);
-				console.log(leftPlaneGeometry.vertices.length);
+			function getNoiseData(width, height) {
+				var data = new Uint8Array(width * height);
+				var perlin = new ImprovedNoise();
+				var size = width * height;
+				var quality = 1;
+				var z = Math.random() * 100;
+				for (var j = 0; j < 4; j++) {
+					quality *= 4;
+					for (var i = 0; i < size; i ++) {
+						var x = i % width, y = ~~ (i / width);
+						data[i] += Math.abs(perlin.noise(x / quality, y / quality, z) * 0.5) * quality + 10;
+					}
+				}
+				return data;
 			}
 
 			function animateScene() {
 				requestAnimationFrame(animateScene);
 				renderScene();
-
 				timer += clock.getDelta();
-
+				
 				// Doesn't work out of the function
-				centerPlaneGeometry.verticesNeedUpdate = true;
+				planeGeometry.verticesNeedUpdate = true;
 				// Sin move the points
-				for (i = 0; i < centerPlaneGeometry.vertices.length; i++) {
-					var dir = centerPlaneGeometryVerticesYRandomDir[i];
-					var vertice = centerPlaneGeometry.vertices[i];
-					var newYPos = (Math.sin(timer) * analyser.getAverageFrequency() * dir);
-					// var newYPos = analyser.getAverageFrequency() * 0.2 * dir;
+				for (i = 0; i < planeGeometry.vertices.length; i++) {
+					var dir = pointsYRandomDir[i];
+					var vertice = planeGeometry.vertices[i];
+					var initYPos = pointsYInitValues[i];
+
+					var newYPos = initYPos + (Math.sin(timer) * 10.0 * dir);
+					newYPos += analyser.getFrequencyData()[i] * 0.1;
+
 					vertice.y = newYPos;
 				}
 
-				leftPlaneGeometry.verticesNeedUpdate = true;
-				rightPlaneGeometry.verticesNeedUpdate = true;
-				// Same number of vertices for left & right so let's put it all in there
-				for (i = 0; i < leftPlaneGeometry.vertices.length; i++) {
-					// Left
-					var leftPlaneVerticeDir = sidePlanesGeometryVerticesYRandomDir[i];
-					var leftPlaneVertice = leftPlaneGeometry.vertices[i];
-					var leftPlaneVerticeNewYPos = (Math.sin(timer) * analyser.getAverageFrequency() * 0.2 * leftPlaneVerticeDir);
-					leftPlaneVertice.y = leftPlaneVerticeNewYPos;
-					// Right
-					var rightPlaneVerticeDir = sidePlanesGeometryVerticesYRandomDir[i];
-					var rightPlaneVertice = rightPlaneGeometry.vertices[i];
-					var rightPlaneVerticeNewYPos = (Math.sin(timer) * analyser.getAverageFrequency() * 0.2  * rightPlaneVerticeDir);
-					rightPlaneVertice.y = rightPlaneVerticeNewYPos;
-				}
+				light.intensity = analyser.getAverageFrequency() * 0.01;
 
 				controls.update();
-
-				// console.log(analyser.getAverageFrequency());
 			}
 
 			function renderScene() {
 				renderer.setClearColor(0x1e1e1e, 1);
+
 				renderer.render(scene, camera);
 			}
 
 			function onWindowResize(){
                 camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
+				camera.updateProjectionMatrix();
+				
                 renderer.setSize(window.innerWidth, window.innerHeight);
             }
-
-			function onKeyDown() {
-                switch (event.keyCode) {
-                    case 32: // Space
-                        break;
-                }
-            }
-
-			function getRandomLineGeometry() {
-				var lineGeometry = new THREE.Geometry();
-				var verticesCount = 30;
-				for (var i = 0; i < verticesCount ; i++) {
-					lineGeometry.vertices.push(new THREE.Vector3(getRandomInt(250), getRandomInt(250), getRandomInt(250)));
-				}
-				return lineGeometry;
-			}
-
-			function getRandomInt(max) {
-				return Math.floor(Math.random() * Math.floor(max));
-			}
 		</script>
 	</body>
 
