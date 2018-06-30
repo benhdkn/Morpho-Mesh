@@ -1,6 +1,6 @@
 Morpho-Mesh
 =============
-WIP.
+Simple music visualizer.
 
 See it live here: https://benhdkn.github.io/Morpho-Mesh/
 
