@@ -25,7 +25,7 @@
 				position: absolute;
 				right: 40px;
 				bottom: 40px;
-				font-family: consolas;
+				font-family: consolas, sans-serif;
 				font-size: 10px;
 				color: silver;
 				z-index: 10;
@@ -45,7 +45,7 @@
 	<body>
 		<div id="black-band-top"></div>
 		<div id="black-band-bottom"></div>
-		<div id="music-caption">Track is Breakout by <a href="https://prtcl.bandcamp.com/track/breakout">PRTCL</a></div>
+		<div id="music-caption">Track is <a href="https://prtcl.bandcamp.com/track/breakout">Breakout by PRTCL</a></div>
 
 		<div id="threejs-canvas">
 
@@ -60,7 +60,7 @@
 
 			var timer = 0;
 			var pointsYInitValues = [];
-			var pointsYRandomDir = [];
+			var pointsRandomDir = [];
 
 			var listener = new THREE.AudioListener();
 			var sound = new THREE.Audio(listener);
@@ -89,7 +89,7 @@
 					renderer = new THREE.CanvasRenderer();
 				}
                 renderer.setSize(window.innerWidth, window.innerHeight);
-				// renderer.setPixelRatio(1);
+				renderer.setPixelRatio(2);
                 document.body.appendChild(renderer.domElement);
 				
 				// Scene
@@ -131,7 +131,7 @@
 					pointsYInitValues.push(noiseY);
 
 					var dir = Math.random() < 0.5 ? -1 : 1;
-					pointsYRandomDir.push(dir);
+					pointsRandomDir.push(dir);
 				}
 
 				var baseLitMaterial = new THREE.MeshPhongMaterial({
@@ -147,7 +147,7 @@
 				var wireframeMaterial = new THREE.MeshBasicMaterial({
 					color: 0xFFFFFF, 
 					transparent: true,
-					opacity: 0.1,
+					opacity: 0.05,
 					wireframe: true,
 				});
 
@@ -158,13 +158,10 @@
 				});
 				
 				var planeMesh = new THREE.Mesh(planeGeometry, baseLitMaterial);
-				planeMesh.position.set(0, 0, 0);
 				scene.add(planeMesh);
 				var wireframeMesh = new THREE.Mesh(planeGeometry, wireframeMaterial);
-				wireframeMesh.position.set(0, 1, 0);
 				scene.add(wireframeMesh);
 				var bottomMesh = new THREE.Mesh(planeGeometry, bottomMaterial);
-				bottomMesh.position.set(0, -1, 0);
 				scene.add(bottomMesh);
 				
 				// Event listeners
@@ -196,13 +193,11 @@
 				planeGeometry.verticesNeedUpdate = true;
 				// Sin move the points
 				for (i = 0; i < planeGeometry.vertices.length; i++) {
-					var dir = pointsYRandomDir[i];
 					var vertice = planeGeometry.vertices[i];
 					var initYPos = pointsYInitValues[i];
-
+					var dir = pointsRandomDir[i];
 					var newYPos = initYPos + (Math.sin(timer) * 10.0 * dir);
 					newYPos += analyser.getFrequencyData()[i] * 0.1;
-
 					vertice.y = newYPos;
 				}
 
