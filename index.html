@@ -14,15 +14,33 @@
 				overflow: hidden;
 				background-color: #1e1e1e;
             }
-			#music-caption {
+
+			#loading {
+				position: absolute;
+				top: 40px;
+				left: 50%;
+				-webkit-transform: translateX(-50%);
+				transform: translateX(-50%)
+			}
+
+			#track {
 				position: absolute;
 				right: 40px;
 				bottom: 40px;
-				font-family: Arial, Helvetica, sans-serif;
+				z-index: 5;
+			}
+
+			#loading-text, #track-text {
+				font-family: 'Courier New', Courier, monospace;
 				font-size: 10px;
 				color: silver;
-				z-index: 10;
 			}
+
+			#loading-text {
+				font-size: 12px;
+				font-weight: bold;
+			} 
+
 			a {
 				color: inherit;
 			}
@@ -36,9 +54,17 @@
 	</head>
 
 	<body>
-		<div id="music-caption">Track is <a href="https://prtcl.bandcamp.com/track/breakout">Breakout by PRTCL</a></div>
+		<div id="loading">
+			<div id="loading-text">Loading music</div>
+		</div>
+		<div id="track">
+			<div id="track-text">Track is <a href="https://prtcl.bandcamp.com/track/breakout">Breakout by PRTCL</a></div>
+		</div>
 
 		<script>
+			var loadingTextDiv = document.getElementById('loading-text');
+			var playButtonDiv = document.getElementById('play-button');
+
 			var scene;
 			var camera;
 			var clock;
@@ -55,12 +81,27 @@
 
 			// Load a sound and set it as the Audio object's buffer
 			var audioLoader = new THREE.AudioLoader();
-			audioLoader.load('audio/PRTCL_Breakout.mp3', function(buffer) {
-				sound.setBuffer(buffer);
-				sound.setLoop(true);
-				sound.setVolume(0.5);
-				sound.play();
-			});
+			audioLoader.load('audio/PRTCL_Breakout.mp3', 
+				// onLoad callback
+				function(buffer) {
+					// Setup sound
+					sound.setBuffer(buffer);
+					sound.setLoop(true);
+					sound.setVolume(0.5);
+					// Launch sound on click
+					loadingTextDiv.textContent = 'Click to start!';
+					window.addEventListener('click', function() {
+						sound.play();
+						document.getElementById("loading").style.zIndex = '-10';
+					});
+				},
+
+				// onProgress callback
+				function (xhr) {
+					var roundedDownLoadedProgression = Math.floor(xhr.loaded / xhr.total * 100);
+					loadingTextDiv.textContent = 'Loading music: ' + roundedDownLoadedProgression + '%';
+				},
+			);
 
 			// Create an AudioAnalyser, passing in the sound and desired fftSize
 			var analyser = new THREE.AudioAnalyser(sound, 128);
@@ -93,7 +134,7 @@
 
 				// Camera
 				camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 10000);
-				camera.position.set(0, 100, 500);
+				camera.position.set(0, 200, 500);
 				scene.add(camera);
 
 				// Controls
@@ -151,6 +192,7 @@
 				scene.add(wireframeMesh);
 				var bottomMesh = new THREE.Mesh(planeGeometry, bottomMaterial);
 				scene.add(bottomMesh);
+				planeMesh.position.y = wireframeMesh.position.y = bottomMesh.position.y = 60;
 				
 				// Event listeners
 				window.addEventListener('resize', onWindowResize, false);
