@@ -47,7 +47,6 @@
 		</style>
 
 		<script src="js/Three.min.js"></script>
-		<script src="js/Detector.js"></script>
 		<script src="js/ImprovedNoise.js"></script>
 		<script src="js/OrbitControls.js"></script>
 
@@ -69,54 +68,52 @@
 			var camera;
 			var clock;
 			var controls;
-			var light; 
 			var planeGeometry;
+			var analizer;
 
 			var timer = 0;
-			var pointsYInitValues = [];
-			var pointsRandomDir = [];
+			var verticesInitialYPositions = [];
+			var verticesRandomDirection = [];
 
-			var listener = new THREE.AudioListener();
-			var sound = new THREE.Audio(listener);
-
-			// Load a sound and set it as the Audio object's buffer
-			var audioLoader = new THREE.AudioLoader();
-			audioLoader.load('audio/PRTCL_Breakout.mp3', 
-				// onLoad callback
-				function(buffer) {
-					// Setup sound
-					sound.setBuffer(buffer);
-					sound.setLoop(true);
-					sound.setVolume(0.5);
-					// Launch sound on click
-					loadingTextDiv.textContent = 'Click to start!';
-					window.addEventListener('click', function() {
-						sound.play();
-						document.getElementById("loading").style.zIndex = '-10';
-					});
-				},
-
-				// onProgress callback
-				function (xhr) {
-					var roundedDownLoadedProgression = Math.floor(xhr.loaded / xhr.total * 100);
-					loadingTextDiv.textContent = 'Loading music: ' + roundedDownLoadedProgression + '%';
-				},
-			);
-
-			// Create an AudioAnalyser, passing in the sound and desired fftSize
-			var analyser = new THREE.AudioAnalyser(sound, 128);
-
+			initializeAudio();
 			initializeScene();
 			animateScene();
+			window.addEventListener('resize', onWindowResize, false);
+
+			function initializeAudio() {
+				var listener = new THREE.AudioListener();
+				var sound = new THREE.Audio(listener);
+
+				// Load a sound and set it as the Audio object's buffer
+				var audioLoader = new THREE.AudioLoader();
+				audioLoader.load('audio/PRTCL_Breakout.mp3', 
+					// onLoad callback
+					function(buffer) {
+						// Setup sound
+						sound.setBuffer(buffer);
+						sound.setLoop(true);
+						sound.setVolume(0.5);
+						// Launch sound on click
+						loadingTextDiv.textContent = 'Click to start!';
+						window.addEventListener('click', function() {
+							sound.play();
+							document.getElementById("loading").style.zIndex = '-10';
+						});
+					},
+					// onProgress callback
+					function(xhr) {
+						var roundedDownLoadedProgression = Math.floor(xhr.loaded / xhr.total * 100);
+						loadingTextDiv.textContent = 'Loading music: ' + roundedDownLoadedProgression + '%';
+					},
+				);
+
+				// Create an AudioAnalyser, passing in the sound and desired fftSize
+				analyser = new THREE.AudioAnalyser(sound, 128);
+			}
 
 			function initializeScene(){
 				// Renderer
-				if (Detector.webgl) {
-					renderer = new THREE.WebGLRenderer({ antialiasing: true });
-				} 
-				else {
-					renderer = new THREE.CanvasRenderer();
-				}
+				renderer = new THREE.WebGLRenderer({ antialiasing: true });
                 renderer.setSize(window.innerWidth, window.innerHeight);
 				renderer.setPixelRatio(2);
                 document.body.appendChild(renderer.domElement);
@@ -128,9 +125,13 @@
 				clock = new THREE.Clock();
 
 				// Lighting
-				light = new THREE.PointLight(0xffffff, 1, 0);
-				light.position.set(0, 400, 0);
-				scene.add(light);
+				lightUp = new THREE.PointLight(0xffffff, 1, 0);
+				lightUp.position.set(0, 400, 0);
+				scene.add(lightUp);
+
+				lightDown = new THREE.PointLight(0x00afbd, 1, 0);
+				lightDown.position.set(0, -400, 0);
+				scene.add(lightDown);
 
 				// Camera
 				camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 10000);
@@ -156,11 +157,9 @@
 					var y = Math.floor(i / quality);
 					var noiseY = noiseData[(x * step) + (y * step) * 1024] * 2 - 128;
 					planeGeometry.vertices[i].y = noiseY;
-
-					pointsYInitValues.push(noiseY);
-
-					var dir = Math.random() < 0.5 ? -1 : 1;
-					pointsRandomDir.push(dir);
+					verticesInitialYPositions.push(noiseY);
+					var direction = Math.random() < 0.5 ? -1 : 1;
+					verticesRandomDirection.push(direction);
 				}
 
 				var baseLitMaterial = new THREE.MeshPhongMaterial({
@@ -187,15 +186,15 @@
 				});
 				
 				var planeMesh = new THREE.Mesh(planeGeometry, baseLitMaterial);
-				scene.add(planeMesh);
 				var wireframeMesh = new THREE.Mesh(planeGeometry, wireframeMaterial);
-				scene.add(wireframeMesh);
 				var bottomMesh = new THREE.Mesh(planeGeometry, bottomMaterial);
-				scene.add(bottomMesh);
-				planeMesh.position.y = wireframeMesh.position.y = bottomMesh.position.y = 60;
-				
-				// Event listeners
-				window.addEventListener('resize', onWindowResize, false);
+
+				var group = new THREE.Group();
+				group.add(planeMesh);
+				group.add(wireframeMesh);
+				group.add(bottomMesh);
+				scene.add(group);
+				group.position.y = 60;
 			}
 
 			function getNoiseData(width, height) {
@@ -217,37 +216,48 @@
 			function animateScene() {
 				requestAnimationFrame(animateScene);
 				renderScene();
+
 				timer += clock.getDelta();
-				
-				// Doesn't work out of the function
-				planeGeometry.verticesNeedUpdate = true;
+
 				// Sin move the points
+				planeGeometry.verticesNeedUpdate = true; // Doesn't work out of the function
 				for (i = 0; i < planeGeometry.vertices.length; i++) {
 					var vertice = planeGeometry.vertices[i];
-					var initYPos = pointsYInitValues[i];
-					var dir = pointsRandomDir[i];
-					var newYPos = initYPos + (Math.sin(timer) * 10.0 * dir);
-					newYPos += analyser.getFrequencyData()[i] * 0.1;
+					var initialYPosition = verticesInitialYPositions[i];
+					var direction = verticesRandomDirection[i];
+					var newYPos = initialYPosition + (Math.sin(timer) * 10.0 * direction);
+					newYPos += analyser.getFrequencyData()[i] * 0.15;
 					vertice.y = newYPos;
 				}
 
-				light.intensity = analyser.getAverageFrequency() * 0.01;
+				var lowerHalfFrequencyData = analyser.getFrequencyData().slice(0, (analyser.getFrequencyData().length / 2) - 1);
+				var upperHalfFrequencyData = analyser.getFrequencyData().slice((analyser.getFrequencyData().length / 2) - 1, analyser.getFrequencyData().length - 1);
+				var lowerAverage = average(lowerHalfFrequencyData);
+				var upperAverage = average(upperHalfFrequencyData);
+				lightUp.intensity = upperAverage * 0.01;
+				lightDown.intensity = lowerAverage * 0.01;
 
+				controls.autoRotateSpeed = 0.5 + (analyser.getAverageFrequency() * 0.01);
 				controls.update();
 			}
-
+			
 			function renderScene() {
 				renderer.setClearColor(0x1e1e1e, 1);
-
+				
 				renderer.render(scene, camera);
 			}
 
-			function onWindowResize(){
+			function average(array) {
+				var total = array.reduce(function(sum, b) { return sum + b; });
+				return (total / array.length);
+			}
+
+			function onWindowResize() {
                 camera.aspect = window.innerWidth / window.innerHeight;
 				camera.updateProjectionMatrix();
 				
                 renderer.setSize(window.innerWidth, window.innerHeight);
-            }
+			}
 		</script>
 	</body>
 
