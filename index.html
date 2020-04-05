@@ -57,7 +57,7 @@
 			<div id="loading-text">Loading music</div>
 		</div>
 		<div id="track">
-			<div id="track-text">Track is <a href="https://prtcl.bandcamp.com/track/breakout">Breakout by PRTCL</a></div>
+			<div id="track-text">Music: <a href="https://shogunaudiojoeford.bandcamp.com/track/where-is-the-sun-2">Joe Ford - Where Is The Sun</a></div>
 		</div>
 
 		<script>
@@ -87,7 +87,7 @@
 
 				// Load a sound and set it as the Audio object's buffer
 				var audioLoader = new THREE.AudioLoader();
-				audioLoader.load('audio/PRTCL_Breakout.mp3', 
+				audioLoader.load('audio/JoeFord_WhereIsTheSun.mp3', 
 					// onLoad callback
 					function(buffer) {
 						// Setup sound
@@ -238,7 +238,7 @@
 				lightUp.intensity = upperAverage * 0.01;
 				lightDown.intensity = lowerAverage * 0.01;
 
-				controls.autoRotateSpeed = 0.5 + (analyser.getAverageFrequency() * 0.01);
+				controls.autoRotateSpeed = 0.5 + (analyser.getAverageFrequency() * 0.02);
 				controls.update();
 			}
 			
