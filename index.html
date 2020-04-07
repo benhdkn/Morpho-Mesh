@@ -61,31 +61,29 @@
 		</div>
 
 		<script>
-			var loadingTextDiv = document.getElementById('loading-text');
-			var playButtonDiv = document.getElementById('play-button');
-
 			var scene;
 			var camera;
 			var clock;
 			var controls;
 			var lightUp, lightDown;
 			var planeGeometry;
-			var analizer;
 
-			var timer = 0;
+			var sineTimer = 0;
+
 			var verticesInitialYPositions = [];
 			var verticesRandomDirection = [];
 
 			initializeAudio();
 			initializeScene();
 			animateScene();
+			
 			window.addEventListener('resize', onWindowResize, false);
 
 			function initializeAudio() {
 				var listener = new THREE.AudioListener();
 				var sound = new THREE.Audio(listener);
 
-				// Load a sound and set it as the Audio object's buffer
+				// Load a sound and set it as the audio loader object's buffer
 				var audioLoader = new THREE.AudioLoader();
 				audioLoader.load('audio/JoeFord_WhereIsTheSun.mp3', 
 					// onLoad callback
@@ -95,21 +93,21 @@
 						sound.setLoop(true);
 						sound.setVolume(0.5);
 						// Launch sound on click
-						loadingTextDiv.textContent = 'Click to start!';
+						document.getElementById('loading-text').textContent = 'Click to start!';
 						window.addEventListener('click', function() {
 							sound.play();
-							document.getElementById("loading").style.zIndex = '-10';
+							document.getElementById("loading").style.visibility = 'hidden';
 						});
 					},
 					// onProgress callback
 					function(xhr) {
 						var roundedDownLoadedProgression = Math.floor(xhr.loaded / xhr.total * 100);
-						loadingTextDiv.textContent = 'Loading music: ' + roundedDownLoadedProgression + '%';
+						document.getElementById('loading-text').textContent = 'Loading music: ' + roundedDownLoadedProgression + '%';
 					},
 				);
 
 				// Create an AudioAnalyser, passing in the sound and desired fftSize
-				analyser = new THREE.AudioAnalyser(sound, 128);
+				audioAnalyser = new THREE.AudioAnalyser(sound, 128);
 			}
 
 			function initializeScene(){
@@ -146,12 +144,15 @@
 				controls.enabled = false;
 
 				// Meshes
+				// Mesh geometry
 				var noiseData = getNoiseData(1024, 1024);
 				var quality = 8;
 				var step = 1024 / quality;
 				planeGeometry = new THREE.PlaneGeometry(600, 600, quality - 1, quality - 1);
+
 				// Rotate the geometry
 				planeGeometry.applyMatrix(new THREE.Matrix4().makeRotationX(- Math.PI / 2));
+
 				// Apply noise, save it and set a random direction for each vertices
 				for (var i = 0, l = planeGeometry.vertices.length; i < l; i ++) {
 					var x = i % quality;
@@ -163,6 +164,7 @@
 					verticesRandomDirection.push(direction);
 				}
 
+				// Create the materials
 				var baseLitMaterial = new THREE.MeshPhongMaterial({
 					color: 0x191919,
 					emissive: 0x0c2426,
@@ -172,24 +174,22 @@
 					side: THREE.DoubleSide,
 					depthTest: false,
 				});
-
 				var wireframeMaterial = new THREE.MeshBasicMaterial({
 					color: 0xFFFFFF, 
 					transparent: true,
 					opacity: 0.05,
 					wireframe: true,
 				});
-
 				var bottomMaterial = new THREE.MeshBasicMaterial({
 					color: 0x191919, 
 					transparent: true,
 					opacity: 0.3,
 				});
 				
+				// Create the meshes and add them to the scene
 				var planeMesh = new THREE.Mesh(planeGeometry, baseLitMaterial);
 				var wireframeMesh = new THREE.Mesh(planeGeometry, wireframeMaterial);
 				var bottomMesh = new THREE.Mesh(planeGeometry, bottomMaterial);
-
 				var group = new THREE.Group();
 				group.add(planeMesh);
 				group.add(wireframeMesh);
@@ -215,31 +215,32 @@
 			}
 
 			function animateScene() {
-				requestAnimationFrame(animateScene);
-				renderScene();
-
-				timer += clock.getDelta();
-
-				// Sin move the points
+				// Move the vertices with sine and audio frequency
+				sineTimer += clock.getDelta();
 				planeGeometry.verticesNeedUpdate = true; // Doesn't work out of the function
 				for (i = 0; i < planeGeometry.vertices.length; i++) {
 					var vertice = planeGeometry.vertices[i];
 					var initialYPosition = verticesInitialYPositions[i];
 					var direction = verticesRandomDirection[i];
-					var newYPos = initialYPosition + (Math.sin(timer) * 10.0 * direction);
-					newYPos += analyser.getFrequencyData()[i] * 0.15;
+					var newYPos = initialYPosition + (Math.sin(sineTimer) * 10.0 * direction);
+					newYPos += audioAnalyser.getFrequencyData()[i] * 0.15;
 					vertice.y = newYPos;
 				}
 
-				var lowerHalfFrequencyData = analyser.getFrequencyData().slice(0, (analyser.getFrequencyData().length / 2) - 1);
-				var upperHalfFrequencyData = analyser.getFrequencyData().slice((analyser.getFrequencyData().length / 2) - 1, analyser.getFrequencyData().length - 1);
+				// Change the lights intensity with bass and treeble average frequencies
+				var lowerHalfFrequencyData = audioAnalyser.getFrequencyData().slice(0, (audioAnalyser.getFrequencyData().length / 2) - 1);
+				var upperHalfFrequencyData = audioAnalyser.getFrequencyData().slice((audioAnalyser.getFrequencyData().length / 2) - 1, audioAnalyser.getFrequencyData().length - 1);
 				var lowerAverage = average(lowerHalfFrequencyData);
 				var upperAverage = average(upperHalfFrequencyData);
 				lightUp.intensity = upperAverage * 0.01;
 				lightDown.intensity = lowerAverage * 0.01;
 
-				controls.autoRotateSpeed = 0.5 + (analyser.getAverageFrequency() * 0.02);
+				// Change the control speed with audio frequency
+				controls.autoRotateSpeed = 0.5 + (audioAnalyser.getAverageFrequency() * 0.02);
 				controls.update();
+
+				requestAnimationFrame(animateScene);
+				renderScene();
 			}
 			
 			function renderScene() {
